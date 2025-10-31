@@ -1,6 +1,8 @@
 # fwdsローバーの3Dモデルのパッケージ
 
-![](images/fwdsrover_description.png)
+<p align="center">
+  <img src="./images/fwdsrover_description.png" width="500" />
+</p>
 
 ## 準備
 ヴイストンの台車ロボットのオプションを表示する場合は、`vs_rover_options_description`というパッケージを`src`フォルダーにクローンしてください。（詳細は[こちら](https://github.com/vstoneofficial/vs_rover_options_description.git)を参照してください）
