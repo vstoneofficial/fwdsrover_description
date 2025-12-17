@@ -11,6 +11,7 @@
     wheel_velocity_controller:
       type: velocity_controllers/JointGroupVelocityController
 
+
 steer_position_controller:
   ros__parameters:
     joints:
@@ -19,6 +20,7 @@ steer_position_controller:
       - back_right_steering_joint
       - back_left_steering_joint
 
+
 wheel_velocity_controller:
   ros__parameters:
     joints:
@@ -26,12 +28,13 @@ wheel_velocity_controller:
       - front_right_wheel_joint
       - back_right_wheel_joint
       - back_left_wheel_joint
-      
-gazebo_ros2_control:
-  ros__parameters:
-    pid_gains:
-      velocity:
-        front_left_wheel_joint:  {kp: 10.0, ki: 0.00, kd: 0.0}
-        front_right_wheel_joint: {kp: 10.0, ki: 0.00, kd: 0.0}
-        back_left_wheel_joint:   {kp: 10.0, ki: 0.00, kd: 0.0}
-        back_right_wheel_joint:  {kp: 10.0, ki: 0.00, kd: 0.0}
+
+    interface_name: velocity
+
+    command_interfaces:
+      - velocity
+    state_interfaces:
+      - velocity
+
+    initial_value: 0.0
+

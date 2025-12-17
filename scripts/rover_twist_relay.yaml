@@ -1,0 +1,30 @@
+rover_twist_relay:
+  ros__parameters:
+
+    # --------------------
+    # rover selector
+    # --------------------
+    rover: x120a
+
+    # --------------------
+    # default (fallback)
+    # --------------------
+    rover_d: 0.16
+    rover_hb: 0.16
+    wheel_radius: 0.085
+
+    # --------------------
+    # x40a dimensions
+    # --------------------
+    x40a.rover_d: 0.125
+    x40a.rover_hb: 0.125
+    x40a.wheel_radius: 0.07
+
+    # --------------------
+    # x120a dimensions
+    # --------------------
+    x120a.rover_d: 0.16
+    x120a.rover_hb: 0.16
+    x120a.wheel_radius: 0.085
+
+

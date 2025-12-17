@@ -3,12 +3,35 @@ project(fwdsrover_description)
 
 find_package(ament_cmake REQUIRED)
 
+message(STATUS ">>> Installing rover_twist_relay.py into lib/${PROJECT_NAME}")
+
+# --------------------------------------------------
+# Python node
+# --------------------------------------------------
+install(
+  PROGRAMS
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/rover_twist_relay.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# --------------------------------------------------
+# YAML for rover_twist_relay (explicit install)
+# --------------------------------------------------
+install(
+  FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/rover_twist_relay.yaml
+  DESTINATION share/${PROJECT_NAME}/params
+)
+
+# --------------------------------------------------
+# Resource directories
+# --------------------------------------------------
 install(DIRECTORY
   launch
   meshes
-  params
   rviz
   urdf
+  params
   DESTINATION share/${PROJECT_NAME}
 )
 
