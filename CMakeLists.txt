@@ -10,7 +10,7 @@ message(STATUS ">>> Installing rover_twist_relay.py into lib/${PROJECT_NAME}")
 # --------------------------------------------------
 install(
   PROGRAMS
-    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/rover_twist_relay.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/params/rover_twist_relay.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -19,7 +19,7 @@ install(
 # --------------------------------------------------
 install(
   FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/rover_twist_relay.yaml
+    ${CMAKE_CURRENT_SOURCE_DIR}/params/rover_twist_relay.yaml
   DESTINATION share/${PROJECT_NAME}/params
 )
 
@@ -41,4 +41,3 @@ if(BUILD_TESTING)
 endif()
 
 ament_package()
-
