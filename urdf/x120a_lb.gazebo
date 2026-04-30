@@ -1,0 +1,87 @@
+<?xml version="1.0"?>
+<robot name="x120a" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="body_color"  value="Gazebo/Silver"/>
+  <xacro:property name="wheel_color" value="Gazebo/DarkGrey"/>
+  <xacro:property name="battery_color" value="Gazebo/DarkGrey"/>
+  <xacro:property name="wb22_45_k_per_spring" value="29400"/>
+  <xacro:property name="sus_spring_parallel_count" value="2"/>
+
+  <gazebo>
+    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+      <robot_param>robot_description</robot_param>
+      <robot_param_node>robot_state_publisher</robot_param_node>
+      <parameters>$(find fwdsrover_description)/params/controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+
+  <gazebo reference="base_link">
+    <material>Gazebo/Silver</material>
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <self_collide>false</self_collide>
+    <turnGravityOff>false</turnGravityOff>
+  </gazebo>
+
+  <gazebo reference="battery_link">
+    <material>${battery_color}</material>
+    <self_collide>false</self_collide>
+    <turnGravityOff>false</turnGravityOff>
+  </gazebo>
+  
+  <xacro:macro name="gazebo_steering" params="joint">
+    <gazebo reference="${joint}">
+      <material>${body_color}</material>
+      <implicitSpringDamper>false</implicitSpringDamper>
+      <erp>1.0</erp>
+      <cfm>0.0</cfm>
+      <limit>
+        <erp>1.0</erp>
+        <cfm>0.0</cfm>
+      </limit>
+      <stop_erp>0.99</stop_erp>
+      <stop_cfm>0.0</stop_cfm>
+    </gazebo>
+  </xacro:macro>
+  
+  <xacro:macro name="gazebo_suspension" params="joint">
+    <gazebo reference="${joint}">
+      <implicitSpringDamper>false</implicitSpringDamper>
+      <springReference>0.0</springReference>
+      <springStiffness>${wb22_45_k_per_spring * sus_spring_parallel_count}</springStiffness>
+    </gazebo>
+  </xacro:macro>
+
+
+  <xacro:macro name="gazebo_wheel" params="link">
+    <gazebo reference="${link}">
+      <material>${wheel_color}</material>
+      <mu1>0.8</mu1>
+      <mu2>0.4</mu2>
+      <slip1>0.01</slip1>
+      <slip2>0.01</slip2>
+      <kp>1e6</kp>
+      <kd>1.0</kd>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:gazebo_steering joint="front_left_steering_joint"/>
+  <xacro:gazebo_steering joint="front_right_steering_joint"/>
+  <xacro:gazebo_steering joint="back_right_steering_joint"/>
+  <xacro:gazebo_steering joint="back_left_steering_joint"/>
+
+  <!-- Suspension -->
+  <xacro:gazebo_suspension joint="front_left_sus_joint"/>
+  <xacro:gazebo_suspension joint="front_right_sus_joint"/>
+  <xacro:gazebo_suspension joint="back_right_sus_joint"/>
+  <xacro:gazebo_suspension joint="back_left_sus_joint"/>
+
+  <!-- Wheels -->
+  <xacro:gazebo_wheel link="front_left_wheel_1"/>
+  <xacro:gazebo_wheel link="front_right_wheel_1"/>
+  <xacro:gazebo_wheel link="back_right_wheel_1"/>
+  <xacro:gazebo_wheel link="back_left_wheel_1"/>
+
+
+</robot>
+

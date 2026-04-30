@@ -18,7 +18,7 @@ def generate_launch_description():
     # Launch arguments
     # --------------------------------------------------
     rover = LaunchConfiguration('rover', default='x40a')
-    gui   = LaunchConfiguration('gui',   default='true')
+    gui = LaunchConfiguration('gui', default='true')
 
     # --------------------------------------------------
     # Select xacro and rviz by rover type
@@ -26,7 +26,8 @@ def generate_launch_description():
     model_file = PythonExpression([
         '"', desc_pkg, '/urdf/',
         '" + ("x40a.xacro" if "', rover,
-        '" == "x40a" else "x120a.xacro")'
+        '" == "x40a" else ("x120a_lb.xacro" if "', rover,
+        '" == "x120a_lb" else "x120a.xacro"))'
     ])
 
     rviz_file = PythonExpression([
@@ -82,7 +83,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'rover',
             default_value='x40a',
-            description='Rover type: x40a or x120a'
+            description='Rover type: x40a, x120a, x120a_lb'
         ),
 
         DeclareLaunchArgument(
@@ -96,4 +97,3 @@ def generate_launch_description():
         joint_state_publisher_gui,
         rviz,
     ])
-

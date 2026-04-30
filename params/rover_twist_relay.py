@@ -33,6 +33,10 @@ class RoverTwistRelay(Node):
         self.declare_parameter('x120a.rover_hb', 0.175)
         self.declare_parameter('x120a.wheel_radius', 0.165)
 
+        self.declare_parameter('x120a_lb.rover_d', 0.16)
+        self.declare_parameter('x120a_lb.rover_hb', 0.16)
+        self.declare_parameter('x120a_lb.wheel_radius', 0.085)
+
         # ----------------------------
         # Apply rover-specific dimensions
         # ----------------------------
@@ -274,4 +278,3 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-

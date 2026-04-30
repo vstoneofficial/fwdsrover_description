@@ -3,6 +3,8 @@
 
   <xacro:property name="body_color"  value="Gazebo/Silver"/>
   <xacro:property name="wheel_color" value="Gazebo/DarkGrey"/>
+  <xacro:property name="wh14_45_k_per_spring" value="14700"/>
+  <xacro:property name="sus_spring_parallel_count" value="2"/>
 
   <gazebo>
     <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
@@ -39,7 +41,7 @@
     <gazebo reference="${joint}">
       <implicitSpringDamper>false</implicitSpringDamper>
       <springReference>0.0</springReference>
-      <springStiffness>29400</springStiffness>
+      <springStiffness>${wh14_45_k_per_spring * sus_spring_parallel_count}</springStiffness>
     </gazebo>
   </xacro:macro>
 
