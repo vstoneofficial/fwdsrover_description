@@ -16,7 +16,7 @@
     <material>Gazebo/Silver</material>
     <mu1>0.2</mu1>
     <mu2>0.2</mu2>
-    <self_collide>true</self_collide>
+    <self_collide>false</self_collide>
     <turnGravityOff>false</turnGravityOff>
   </gazebo>
   
@@ -39,7 +39,7 @@
     <gazebo reference="${joint}">
       <implicitSpringDamper>false</implicitSpringDamper>
       <springReference>0.0</springReference>
-      <springStiffness>58800</springStiffness>
+      <springStiffness>29400</springStiffness>
     </gazebo>
   </xacro:macro>
 

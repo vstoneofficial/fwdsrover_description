@@ -20,4 +20,8 @@ rover_twist_relay:
     x120a.rover_hb: 0.16
     x120a.wheel_radius: 0.085
 
+    # x120a_lb dimensions
+    x120a_lb.rover_d: 0.16
+    x120a_lb.rover_hb: 0.16
+    x120a_lb.wheel_radius: 0.085
 

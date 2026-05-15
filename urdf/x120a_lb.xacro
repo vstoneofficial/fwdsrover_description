@@ -1,0 +1,341 @@
+<?xml version="1.0"?>
+<robot name="x120a_lb" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+   <xacro:include filename="$(find fwdsrover_description)/urdf/materials.xacro"/>
+   <xacro:include filename="$(find fwdsrover_description)/urdf/x120a_lb.gazebo"/>
+   <xacro:include filename="$(find fwdsrover_description)/urdf/x120a_lb.ros2_control.xacro"/>
+ 
+  <!-- OPTION LRF TG30 -->
+   <!-- <xacro:include filename="$(find vs_rover_options_description)/urdf/lrf/tg30_x120a_lb.xacro" /> -->
+
+  <!-- OPTION bumper sensor -->
+   <!-- <xacro:include filename="$(find vs_rover_options_description)/urdf/bumper/bumper_x120a_lb.xacro" />
+   <xacro:bumperbaseboard prefix="front" parent="base_link" xyz="0 0.20515 0.038" z_dir="180" />
+   <xacro:bumperbaseboard prefix="back" parent="base_link" xyz="0 -0.20515 0.038" z_dir="0" />
+   <xacro:bumperbaseboard prefix="left" parent="base_link" xyz="0.20515 0 0.038" z_dir="90" />
+   <xacro:bumperbaseboard prefix="right" parent="base_link" xyz="-0.20515 0 0.038" z_dir="270" /> -->
+  
+  <!-- OPTION camera stay -->
+   <!-- <xacro:include filename="$(find vs_rover_options_description)/urdf/cam_stay/cam_stay_x120a_lb.xacro" /> -->
+   
+  <!-- OPTION Intel Realsense depth camera D435i (camera stay required) -->
+   <!-- <xacro:include filename="$(find vs_rover_options_description)/urdf/depth_cam/_d435i.urdf.xacro" />
+   <xacro:sensor_d435i parent="cam_mount_link" use_nominal_extrinsics="true">
+   <origin xyz="0.0295 0 0.0095" rpy="0 0 0" />
+   </xacro:sensor_d435i> -->
+
+  <!-- Battery mass (kg) -->
+  <xacro:property name="battery_mass" value="35.0"/>
+
+  <link name="base_footprint"/>
+
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0.075"/>
+      <mass value="15"/>
+      <inertia
+        ixx="0.12128076034316"
+        ixy="0.00120136894281"
+        ixz="-0.00048291958805"
+        iyy="0.12342190392259"
+        iyz="-0.00033717869722"
+        izz="0.13609112422642"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="package://fwdsrover_description/meshes/x120a_lb/base_link.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.206"/>
+      <geometry>
+        <box size="0.476 0.476 0.070"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="battery_link">
+    <inertial>
+      <origin xyz="0.000013 -0.000279 0.138114" rpy="0 0 0"/>
+      <mass value="${battery_mass}"/>
+      <inertia
+        ixx="${4.499953e-01 * (battery_mass / 35.0)}"
+        ixy="${1.546052e-04 * (battery_mass / 35.0)}"
+        ixz="${1.399568e-05 * (battery_mass / 35.0)}"
+        iyy="${2.183216e-01 * (battery_mass / 35.0)}"
+        iyz="${4.094297e-04 * (battery_mass / 35.0)}"
+        izz="${3.978825e-01 * (battery_mass / 35.0)}"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="package://fwdsrover_description/meshes/x120a_lb/battery.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="dark_grey"/>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://fwdsrover_description/meshes/x120a_lb/battery.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="base_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+  </joint>
+
+  <joint name="battery_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 ${radians(-90)}"/>
+    <parent link="base_link"/>
+    <child link="battery_link"/>
+  </joint>
+
+  <!-- ================================================= -->
+  <!-- Auto inertia macros -->
+  <!-- ================================================= -->
+
+  <!-- Solid cylinder inertia (axis Z) -->
+  <xacro:macro name="inertia_cylinder" params="m r h">
+    <xacro:property name="Izz" value="${0.5 * m * r * r}"/>
+    <xacro:property name="Ixx" value="${(1.0/12.0) * m * (3*r*r + h*h)}"/>
+    <inertia ixx="${Ixx}" ixy="0" ixz="0"
+             iyy="${Ixx}" iyz="0"
+             izz="${Izz}"/>
+  </xacro:macro>
+
+  <!-- Solid box inertia -->
+  <xacro:macro name="inertia_box" params="m x y z">
+    <inertia
+      ixx="${(1.0/12.0) * m * (y*y + z*z)}"
+      ixy="0" ixz="0"
+      iyy="${(1.0/12.0) * m * (x*x + z*z)}"
+      iyz="0"
+      izz="${(1.0/12.0) * m * (x*x + y*y)}"/>
+  </xacro:macro>
+
+  <!-- ================================================= -->
+  <!-- Link macros (mesh-based inertia) -->
+  <!-- ================================================= -->
+
+  <!-- Joint base: cylinder -->
+  <xacro:macro name="joint_link" params="name m r h">
+    <link name="${name}">
+      <inertial>
+        <origin xyz="0.0 -0.016887 -0.027546"/>
+        <mass value="${m}"/>
+        <inertia
+          ixx="${4.558148e-04 * (m / 0.229)}"
+          ixy="0.0"
+          ixz="0.0"
+          iyy="${4.067504e-04 * (m / 0.229)}"
+          iyz="${-8.573901e-05 * (m / 0.229)}"
+          izz="${3.836429e-04 * (m / 0.229)}"/>
+      </inertial>
+      <visual>
+        <geometry>
+          <mesh filename="package://fwdsrover_description/meshes/x120a_lb/joint.stl"
+                scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="silver"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 -0.007"/>
+        <geometry>
+          <cylinder radius="${r}" length="${h}"/>
+        </geometry>
+      </collision>
+    </link>
+  </xacro:macro>
+
+  <!-- Suspension: box -->
+  <xacro:macro name="sus_link" params="name m x y z">
+    <link name="${name}">
+      <inertial>
+        <origin xyz="0.0 -0.045266 -0.028925"/>
+        <mass value="${m}"/>
+        <inertia
+          ixx="${7.630819e-05 * (m / 0.195)}"
+          ixy="0.0"
+          ixz="0.0"
+          iyy="${1.083020e-04 * (m / 0.195)}"
+          iyz="${-2.655281e-07 * (m / 0.195)}"
+          izz="${6.435011e-05 * (m / 0.195)}"/>
+      </inertial>
+      <visual>
+        <geometry>
+          <mesh filename="package://fwdsrover_description/meshes/x120a_lb/sus.stl"
+                scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="silver"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.03"/>
+        <geometry>
+          <box size="${x} ${y} ${z}"/>
+        </geometry>
+      </collision>
+    </link>
+  </xacro:macro>
+
+  <!-- ================================================= -->
+  <!-- Joint macros -->
+  <!-- ================================================= -->
+
+  <xacro:macro name="steering_joint" params="name parent child xyz rpy">
+    <joint name="${name}" type="revolute">
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+      <axis xyz="0 0 1"/>
+      <parent link="${parent}"/>
+      <child link="${child}"/>
+      <limit lower="-6.28319" upper="6.28319" effort="2.2" velocity="28.27"/>
+      <dynamics damping="0.1"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="sus_joint" params="name parent child xyz">
+    <joint name="${name}" type="prismatic">
+      <origin xyz="${xyz}"/>
+      <axis xyz="0 0 1"/>
+      <parent link="${parent}"/>
+      <child link="${child}"/>
+      <limit lower="0.0" upper="0.015" effort="300" velocity="1.0"/>
+      <dynamics damping="300" friction="0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="wheel_joint" params="name parent child axis_z xyz">
+    <joint name="${name}" type="continuous">
+      <origin xyz="${xyz}" rpy="${radians(-90)} 0 0"/>
+      <axis xyz="0 0 ${axis_z}"/>
+      <parent link="${parent}"/>
+      <child link="${child}"/>
+      <limit velocity="26.18" effort="18.0"/>
+      <dynamics damping="0.3" friction="0.5"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- ================================================= -->
+  <!-- Wheel unit (all auto inertia except base) -->
+  <!-- ================================================= -->
+
+  <xacro:macro name="wheel_unit"
+    params="prefix steering_xyz steering_rpy wheel_axis_z">
+
+    <!-- constants (from original model) -->
+    <xacro:property name="joint_m" value="0.229"/>
+    <xacro:property name="joint_r" value="0.05"/>
+    <xacro:property name="joint_h" value="0.014"/>
+
+    <xacro:property name="sus_m" value="0.195"/>
+    <xacro:property name="sus_x" value="0.05"/>
+    <xacro:property name="sus_y" value="0.03"/>
+    <xacro:property name="sus_z" value="0.06"/>
+
+    <xacro:property name="wheel_m" value="3.0"/>
+    <xacro:property name="wheel_r" value="0.085"/>
+    <xacro:property name="wheel_h" value="0.045"/>
+
+    <xacro:joint_link name="${prefix}_joint_1"
+                      m="${joint_m}" r="${joint_r}" h="${joint_h}"/>
+
+    <xacro:sus_link name="${prefix}_sus_1"
+                    m="${sus_m}" x="${sus_x}" y="${sus_y}" z="${sus_z}"/>
+
+    <link name="${prefix}_wheel_1">
+      <inertial>
+        <origin xyz="0.0 0.0 0.029125"/>
+        <mass value="${wheel_m}"/>
+        <inertia
+          ixx="${5.718281e-03 * (wheel_m / 3.0)}"
+          ixy="0.0"
+          ixz="0.0"
+          iyy="${5.718281e-03 * (wheel_m / 3.0)}"
+          iyz="0.0"
+          izz="${9.844412e-03 * (wheel_m / 3.0)}"/>
+      </inertial>
+      <visual>
+        <geometry>
+          <mesh filename="package://fwdsrover_description/meshes/x120a_lb/wheel.stl"
+                scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.027"/>
+        <geometry>
+          <cylinder radius="${wheel_r}" length="${wheel_h}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <xacro:steering_joint
+      name="${prefix}_steering_joint"
+      parent="base_link"
+      child="${prefix}_joint_1"
+      xyz="${steering_xyz}"
+      rpy="${steering_rpy}"/>
+
+    <xacro:sus_joint
+      name="${prefix}_sus_joint"
+      parent="${prefix}_joint_1"
+      child="${prefix}_sus_1"
+      xyz="${sus_joint_x} ${sus_joint_y} ${sus_joint_z}"/>
+
+    <xacro:wheel_joint
+      name="${prefix}_wheel_joint"
+      parent="${prefix}_sus_1"
+      child="${prefix}_wheel_1"
+      axis_z="${wheel_axis_z}"
+      xyz="${wheel_joint_x} ${wheel_joint_y} ${wheel_joint_z}"/>
+
+  </xacro:macro>
+
+  <!-- ================================================= -->
+  <!-- Steering base position (tuning parameters) -->
+  <!-- Change only these 3 values when adjusting steering joints -->
+  <!-- ================================================= -->
+
+  <xacro:property name="steer_x" value="0.18"/>
+  <xacro:property name="steer_y" value="0.18"/>
+  <xacro:property name="steer_z" value="0.193"/>
+
+  <!-- Suspension joint base position (tuning parameters) -->
+  <xacro:property name="sus_joint_x" value="0.0"/>
+  <xacro:property name="sus_joint_y" value="0.0"/>
+  <xacro:property name="sus_joint_z" value="-0.065"/>
+
+  <!-- Wheel joint base position (tuning parameters) -->
+  <xacro:property name="wheel_joint_x" value="0.0"/>
+  <xacro:property name="wheel_joint_y" value="-0.027"/>
+  <xacro:property name="wheel_joint_z" value="-0.043"/>
+
+  <!-- ================================================= -->
+  <!-- Wheel instances -->
+  <!-- ================================================= -->
+
+  <xacro:wheel_unit prefix="front_left"
+                    steering_xyz="${steer_x} ${steer_y} ${steer_z}"
+                    steering_rpy="0 0 0"
+                    wheel_axis_z="1"/>
+
+  <xacro:wheel_unit prefix="front_right"
+                    steering_xyz="${steer_x} ${-steer_y} ${steer_z}"
+                    steering_rpy="0 0 ${radians(180)}"
+                    wheel_axis_z="-1"/>
+
+  <xacro:wheel_unit prefix="back_right"
+                    steering_xyz="${-steer_x} ${-steer_y} ${steer_z}"
+                    steering_rpy="0 0 ${radians(180)}"
+                    wheel_axis_z="-1"/>
+
+  <xacro:wheel_unit prefix="back_left"
+                    steering_xyz="${-steer_x} ${steer_y} ${steer_z}"
+                    steering_rpy="0 0 0"
+                    wheel_axis_z="1"/>
+
+</robot>
