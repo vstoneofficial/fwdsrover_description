@@ -1,3 +1,6 @@
+import os
+import shlex
+
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -24,15 +27,15 @@ def generate_launch_description():
     # Select xacro and rviz by rover type
     # --------------------------------------------------
     model_file = PythonExpression([
-        '"', desc_pkg, '/urdf/',
-        '" + ("x40a.xacro" if "', rover,
+        repr(shlex.quote(os.path.join(desc_pkg, 'urdf') + os.sep)),
+        ' + ("x40a.xacro" if "', rover,
         '" == "x40a" else ("x120a_lb.xacro" if "', rover,
         '" == "x120a_lb" else "x120a.xacro"))'
     ])
 
     rviz_file = PythonExpression([
-        '"', desc_pkg, '/rviz/',
-        '" + ("x40a.rviz" if "', rover,
+        repr(os.path.join(desc_pkg, 'rviz') + os.sep),
+        ' + ("x40a.rviz" if "', rover,
         '" == "x40a" else "x120a.rviz")'
     ])
 
