@@ -1,0 +1,3 @@
+*.py text eol=lf
+*.xacro text eol=lf
+*.gazebo text eol=lf

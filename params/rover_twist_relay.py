@@ -1,279 +1,185 @@
 #!/usr/bin/env python3
+"""Four independent wheel units, configured exclusively by robot_description."""
 import math
+import signal
+import xml.etree.ElementTree as ET
 import rclpy
+from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
+from rclpy.signals import SignalHandlerOptions
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Float64MultiArray
-from rclpy.parameter import Parameter
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64
+
+
+def rotation(rpy):
+    r, p, y = rpy
+    cr, sr, cp, sp, cy, sy = math.cos(r), math.sin(r), math.cos(p), math.sin(p), math.cos(y), math.sin(y)
+    return ((cy*cp, cy*sp*sr-sy*cr, cy*sp*cr+sy*sr),
+            (sy*cp, sy*sp*sr+cy*cr, sy*sp*cr-cy*sr), (-sp, cp*sr, cp*cr))
+
+
+def mv(matrix, vector):
+    return tuple(sum(a*b for a, b in zip(row, vector)) for row in matrix)
+
+
+def mm(a, b):
+    return tuple(tuple(sum(a[i][k]*b[k][j] for k in range(3)) for j in range(3)) for i in range(3))
+
+
+def model_units(description):
+    """Read the actual frames, radii, actuator rates and limits from URDF."""
+    robot = ET.fromstring(description)
+    joints = {j.get('name'): j for j in robot.findall('joint')}
+    by_child = {j.find('child').get('link'): j for j in joints.values()}
+    controls = {p.findtext('joint_name'): p for p in robot.findall(
+        "gazebo/plugin[@name='gz::sim::systems::JointController']")}
+    identity = rotation((0., 0., 0.))
+
+    def transform(link):
+        if link not in by_child:
+            return identity, (0., 0., 0.)
+        joint = by_child[link]
+        parent_r, parent_t = transform(joint.find('parent').get('link'))
+        origin = joint.find('origin')
+        xyz = tuple(map(float, origin.get('xyz', '0 0 0').split()))
+        rpy = tuple(map(float, origin.get('rpy', '0 0 0').split()))
+        delta = mv(parent_r, xyz)
+        return mm(parent_r, rotation(rpy)), tuple(a+b for a, b in zip(parent_t, delta))
+
+    units = []
+    for prefix in ('front_left', 'front_right', 'back_right', 'back_left'):
+        sn, wn = prefix + '_steering_joint', prefix + '_wheel_joint'
+        steering, wheel = joints[sn], joints[wn]
+        sr, pivot = transform(steering.find('child').get('link'))
+        axis = mv(sr, tuple(map(float, steering.find('axis').get('xyz').split())))
+        if abs(axis[2] - 1.) > 1e-5:
+            raise ValueError(f'{sn}: expected an upward steering axis')
+        wr, wheel_origin = transform(wheel.find('child').get('link'))
+        axis = mv(wr, tuple(map(float, wheel.find('axis').get('xyz').split())))
+        heading = math.atan2(-axis[0], axis[1])  # rolling direction: axis cross up
+        link = robot.find(f"link[@name='{wheel.find('child').get('link')}']")
+        collision = link.find('collision')
+        cylinder = collision.find('geometry/cylinder')
+        radius = float(cylinder.get('radius'))
+        origin = collision.find('origin')
+        local_center = tuple(map(float, origin.get('xyz', '0 0 0').split())) if origin is not None else (0., 0., 0.)
+        center = tuple(a+b for a, b in zip(wheel_origin, mv(wr, local_center)))
+        center_offset = tuple(center[i] - pivot[i] for i in (0, 1))
+        slimit, wlimit = steering.find('limit'), wheel.find('limit')
+        units.append(dict(steer=sn, wheel=wn, pivot=pivot[:2], heading=heading, radius=radius,
+                          center_offset=center_offset, half_width=float(cylinder.get('length')) * .5,
+                          lower=float(slimit.get('lower')), upper=float(slimit.get('upper')),
+                          steer_speed=float(slimit.get('velocity')), wheel_speed=float(wlimit.get('velocity')),
+                          steer_acceleration=float(controls[sn].findtext('max_acceleration')),
+                          wheel_acceleration=float(controls[wn].findtext('max_acceleration')),
+                          position_gain=float(controls[sn].findtext('position_p_gain'))))
+    return units
+
+
+def wheel_targets(units, vx, vy, wz, current):
+    targets = []
+    for unit, position in zip(units, current):
+        x, y = unit['pivot']
+        wx, wy = vx-wz*y, vy+wz*x
+        speed = math.hypot(wx, wy) / unit['radius']
+        if speed < 1e-9:
+            angle = position
+        else:
+            angle = math.atan2(wy, wx) - unit['heading']
+            choices = []
+            for sign, target in ((1., angle), (-1., angle+math.pi)):
+                for turns in range(-2, 3):
+                    value = target + turns*2*math.pi
+                    if unit['lower'] <= value <= unit['upper']:
+                        choices.append((abs(value-position), value, sign*speed))
+            _, angle, _ = min(choices)
+        c, s = math.cos(angle), math.sin(angle)
+        dx, dy = unit['center_offset']
+        cx, cy = x + c*dx - s*dy, y + s*dx + c*dy
+        heading = unit['heading'] + angle
+        rolling_speed = ((vx-wz*cy)*math.cos(heading)
+                         + (vy+wz*cx)*math.sin(heading))
+        # A finite tire contacts the floor on an axial line. Use the limiting
+        # rolling demand at its endpoints, including the actual mounting offset.
+        edge_speed = wz * unit['half_width']
+        speed = max((rolling_speed-edge_speed, rolling_speed+edge_speed), key=abs) / unit['radius']
+        targets.append((angle, speed))
+    scale = max([1.] + [abs(speed)/u['wheel_speed'] for u, (_, speed) in zip(units, targets)])
+    return [(angle, speed/scale) for angle, speed in targets]
+
+
+def slew(previous, target, acceleration, dt):
+    limit = acceleration * dt
+    return previous + max(-limit, min(limit, target-previous))
 
 
 class RoverTwistRelay(Node):
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__('rover_twist_relay')
+        self.units = model_units(self.declare_parameter('robot_description', '').value)
+        self.positions = {}
+        self.command = (0., 0., 0.)
+        self.previous = {name: 0. for u in self.units for name in (u['steer'], u['wheel'])}
+        self.publishers_by_joint = {name: self.create_publisher(Float64, '/fwds/'+name+'/cmd_vel', 10)
+                                   for name in self.previous}
+        self.targets_publisher = self.create_publisher(JointState, '/actuator_targets', 10)
+        self.create_subscription(JointState, '/joint_states', self.state, 10)
+        self.create_subscription(Twist, '/rover_twist', self.command_callback, 10)
+        self.last_time = None
+        self.create_timer(.005, self.tick)
 
-        # ----------------------------
-        # Parameters (declare all)
-        # ----------------------------
-        self.publish_rate_hz = self.declare_parameter('publish_rate', 30.0).value
+    def state(self, msg):
+        self.positions.update(zip(msg.name, msg.position))
 
-        # rover selector
-        self.rover = self.declare_parameter('rover', 'x40a').value
+    def command_callback(self, msg):
+        self.command = (msg.linear.x, msg.linear.y, msg.angular.z)
 
-        # fallback (default)
-        self.rover_d = self.declare_parameter('rover_d', 0.125).value
-        self.rover_hb = self.declare_parameter('rover_hb', 0.125).value
-        self.wheel_radius = self.declare_parameter('wheel_radius', 0.14).value
-
-        # per-rover parameters (flat names)
-        self.declare_parameter('x40a.rover_d', 0.125)
-        self.declare_parameter('x40a.rover_hb', 0.125)
-        self.declare_parameter('x40a.wheel_radius', 0.14)
-
-        self.declare_parameter('x120a.rover_d', 0.165)
-        self.declare_parameter('x120a.rover_hb', 0.175)
-        self.declare_parameter('x120a.wheel_radius', 0.165)
-
-        self.declare_parameter('x120a_lb.rover_d', 0.16)
-        self.declare_parameter('x120a_lb.rover_hb', 0.16)
-        self.declare_parameter('x120a_lb.wheel_radius', 0.085)
-
-        # ----------------------------
-        # Apply rover-specific dimensions
-        # ----------------------------
-        self.apply_rover_dimensions()
-
-        # dynamics
-        self.steer_time_constant = self.declare_parameter('steer_tau', 0.08).value
-        self.wheel_time_constant = self.declare_parameter('wheel_tau', 0.05).value
-
-        self.steer_limit_deg = self.declare_parameter('steer_limit_deg', 95.0).value
-        self.steer_limit_rad = self.steer_limit_deg * math.pi / 180.0
-
-        # topics
-        self.cmd_topic = self.declare_parameter('cmd_topic', '/rover_twist').value
-        self.steer_cmd_topic = self.declare_parameter(
-            'steer_cmd_topic', '/steer_position_controller/commands'
-        ).value
-        self.wheel_cmd_topic = self.declare_parameter(
-            'wheel_cmd_topic', '/wheel_velocity_controller/commands'
-        ).value
-
-        # wheel index
-        self.F_R = 0
-        self.F_L = 1
-        self.R_L = 2
-        self.R_R = 3
-
-        # states
-        self.avr_v = [0.0] * 4
-        self.steer_pos_now = [0.0] * 4
-        self.steer_center = [0.0] * 4
-        self.wheel_angle = [0.0] * 4
-
-        self.last_cmd = None
-        self.last_cmd_time = None
-
-        self.timer_period = 1.0 / self.publish_rate_hz
-        self.prev_time = None
-
-        # ROS
-        self.create_subscription(Twist, self.cmd_topic, self.twist_callback, 10)
-        self.pub_steer_cmd = self.create_publisher(Float64MultiArray, self.steer_cmd_topic, 10)
-        self.pub_wheel_cmd = self.create_publisher(Float64MultiArray, self.wheel_cmd_topic, 10)
-
-        self.timer = self.create_timer(self.timer_period, self.on_timer)
-
-    # ----------------------------------------
-    def apply_rover_dimensions(self) -> None:
-        # Explicitly map rover-specific parameters to active parameters
-
-        prefix = f'{self.rover}.'
-
-        params = self._parameters  # internal storage (rclpy)
-
-        def get_param(name, default):
-            full = prefix + name
-            if full in params:
-                return params[full].value
-            return default
-
-        new_rover_d = get_param('rover_d', self.rover_d)
-        new_rover_hb = get_param('rover_hb', self.rover_hb)
-        new_wheel_radius = get_param('wheel_radius', self.wheel_radius)
-
-        self.set_parameters([
-            Parameter('rover_d', Parameter.Type.DOUBLE, new_rover_d),
-            Parameter('rover_hb', Parameter.Type.DOUBLE, new_rover_hb),
-            Parameter('wheel_radius', Parameter.Type.DOUBLE, new_wheel_radius),
-        ])
-
-        # update cached values
-        self.rover_d = new_rover_d
-        self.rover_hb = new_rover_hb
-        self.wheel_radius = new_wheel_radius
-
-    # ----------------------------------------
-    def twist_callback(self, msg: Twist) -> None:
-        self.last_cmd = msg
-        self.last_cmd_time = self.get_clock().now()
-
-    # ----------------------------------------
-    def on_timer(self) -> None:
+    def tick(self):
         now = self.get_clock().now()
-        if self.prev_time is None:
-            dt = self.timer_period
-        else:
-            dt = (now - self.prev_time).nanoseconds / 1e9
-            if dt <= 0:
-                dt = self.timer_period
-        self.prev_time = now
-
-        if self.last_cmd is None:
-            self.publish_commands()
+        dt = (now.nanoseconds-self.last_time)/1e9 if self.last_time is not None else .005
+        self.last_time = now.nanoseconds
+        if dt <= 0 or not all(u['steer'] in self.positions for u in self.units):
             return
-
-        cmd_vx = float(self.last_cmd.linear.x)
-        cmd_vy = float(self.last_cmd.linear.y)
-        cmd_w = float(self.last_cmd.angular.z)
-
-        is_pure_rot = (abs(cmd_vx) < 1e-6 and abs(cmd_vy) < 1e-6 and abs(cmd_w) > 1e-6)
-
-        rot_gain = ((self.rover_hb * 0.5) + self.rover_d) / math.sqrt(
-            (self.rover_hb * 0.5) ** 2 + self.rover_d ** 2
-        )
-
-        if is_pure_rot:
-            rot_gain *= 1.88
-
-        pos_x = [0.0] * 4
-        pos_y = [0.0] * 4
-        pos_x[self.F_R] = +self.rover_hb / 2.0
-        pos_y[self.F_R] = -self.rover_d
-        pos_x[self.F_L] = +self.rover_hb / 2.0
-        pos_y[self.F_L] = +self.rover_d
-        pos_x[self.R_L] = -self.rover_hb / 2.0
-        pos_y[self.R_L] = +self.rover_d
-        pos_x[self.R_R] = -self.rover_hb / 2.0
-        pos_y[self.R_R] = -self.rover_d
-
-        target_avr_v = [0.0] * 4
-        target_steer = [0.0] * 4
-
-        for i in range(4):
-            vwx = cmd_vx - (rot_gain * 0.75 * cmd_w) * pos_y[i]
-            vwy = cmd_vy + (rot_gain * 0.75 * cmd_w) * pos_x[i]
-
-            speed = math.hypot(vwx, vwy)
-            if speed > 1e-6:
-                direction = math.atan2(vwy, vwx)
-            else:
-                direction = math.atan2(-pos_x[i], pos_y[i])
-
-            target_avr_v[i] = speed
-            target_steer[i] = direction
-
-        alpha_s = 1.0 - math.exp(-dt / max(1e-6, self.steer_time_constant))
-        alpha_w = 1.0 - math.exp(-dt / max(1e-6, self.wheel_time_constant))
-
-        for i in range(4):
-            s_out, v_out = self.normalize_with_limit_and_speed(
-                current_angle=self.steer_pos_now[i],
-                center_angle=self.steer_center[i],
-                target_angle=target_steer[i],
-                limit_rad=self.steer_limit_rad,
-                speed=target_avr_v[i],
-            )
-
-            self.steer_pos_now[i] = self.step_toward_angle(
-                self.steer_pos_now[i], s_out, alpha_s
-            )
-            self.avr_v[i] = self.avr_v[i] + alpha_w * (v_out - self.avr_v[i])
-
-        if self.wheel_radius > 1e-9:
-            for i in range(4):
-                self.wheel_angle[i] += (self.avr_v[i] / self.wheel_radius) * dt
-
-        self.publish_commands()
-
-    # ----------------------------------------
-    def publish_commands(self) -> None:
-        map_idx = [self.F_L, self.F_R, self.R_R, self.R_L]
-
-        steer_msg = Float64MultiArray()
-        steer_msg.data = [self.steer_pos_now[idx] for idx in map_idx]
-        self.pub_steer_cmd.publish(steer_msg)
-
-        wheel_msg = Float64MultiArray()
-        for idx in map_idx:
-            ang_vel = self.avr_v[idx] / self.wheel_radius if self.wheel_radius > 1e-9 else 0.0
-            if abs(ang_vel) < 1e-8:
-                ang_vel = 0.0
-            wheel_msg.data.append(ang_vel)
-        self.pub_wheel_cmd.publish(wheel_msg)
-
-    # ----------------------------------------
-    @staticmethod
-    def normalize_angle(a):
-        while a > math.pi:
-            a -= 2 * math.pi
-        while a <= -math.pi:
-            a += 2 * math.pi
-        return a
-
-    def step_toward_angle(self, cur, target, alpha):
-        cur = self.normalize_angle(cur)
-        tgt = self.normalize_angle(target)
-        diff = tgt - cur
-        if diff > math.pi:
-            diff -= 2 * math.pi
-        if diff < -math.pi:
-            diff += 2 * math.pi
-        return self.normalize_angle(cur + alpha * diff)
-
-    def normalize_with_limit_and_speed(
-        self, current_angle, center_angle, target_angle, limit_rad, speed
-    ):
-        def wrap_to_near(tgt, cur):
-            while tgt - cur > math.pi:
-                tgt -= 2 * math.pi
-            while tgt - cur < -math.pi:
-                tgt += 2 * math.pi
-            return tgt
-
-        def signed_diff(ang):
-            d = ang - center_angle
-            while d > math.pi:
-                d -= 2 * math.pi
-            while d < -math.pi:
-                d += 2 * math.pi
-            return d
-
-        a = wrap_to_near(target_angle, current_angle)
-        b = wrap_to_near(target_angle + math.pi, current_angle)
-
-        use_ang = a
-        use_v = speed
-        if abs(signed_diff(b)) < abs(signed_diff(a)):
-            use_ang = b
-            use_v = -speed
-
-        d = signed_diff(use_ang)
-        if d > limit_rad:
-            use_ang = center_angle + limit_rad
-        if d < -limit_rad:
-            use_ang = center_angle - limit_rad
-
-        return use_ang, use_v
+        current = [self.positions[u['steer']] for u in self.units]
+        targets = wheel_targets(self.units, *self.command, current)
+        diagnostic = JointState()
+        diagnostic.header.stamp = now.to_msg()
+        for unit, position, (angle, speed) in zip(self.units, current, targets):
+            steering = max(-unit['steer_speed'], min(unit['steer_speed'], (angle-position)*unit['position_gain']))
+            steering = slew(self.previous[unit['steer']], steering, unit['steer_acceleration'], dt)
+            speed = slew(self.previous[unit['wheel']], speed, unit['wheel_acceleration'], dt)
+            for name, velocity, target in ((unit['steer'], steering, angle), (unit['wheel'], speed, 0.)):
+                self.previous[name] = velocity
+                self.publishers_by_joint[name].publish(Float64(data=velocity))
+                diagnostic.name.append(name)
+                diagnostic.position.append(target)
+                diagnostic.velocity.append(velocity)
+        self.targets_publisher.publish(diagnostic)
 
 
-def main() -> None:
-    rclpy.init()
+def main():
+    stopping = False
+
+    def request_stop(_signum, _frame):
+        nonlocal stopping
+        stopping = True
+
+    signal.signal(signal.SIGINT, request_stop)
+    signal.signal(signal.SIGTERM, request_stop)
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = RoverTwistRelay()
+    executor = SingleThreadedExecutor(context=node.context)
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        while not stopping and rclpy.ok():
+            executor.spin_once(timeout_sec=.05)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
+        executor.shutdown()
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':

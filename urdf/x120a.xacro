@@ -1,29 +1,35 @@
 <?xml version="1.0"?>
 <robot name="x120a" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+  <!-- Suspension values from the selected Isaac model, in SI units. -->
+  <xacro:property name="suspension_stiffness" value="58800"/>
+  <xacro:property name="suspension_damping" value="300.0"/>
+  <xacro:property name="suspension_friction" value="0.5"/>
+  <xacro:property name="suspension_stroke" value="0.0135"/>
+  <xacro:property name="suspension_force" value="793.8"/>
+  <!-- Actuator values from the selected Isaac USD, SI units. -->
+  <xacro:property name="wheel_max_torque" value="18.0"/>
+  <xacro:property name="wheel_max_velocity" value="25.8823529412"/>
+  <xacro:property name="wheel_max_acceleration" value="19.4117647059"/>
+  <xacro:property name="wheel_drive_damping" value="1000.0"/>
+  <xacro:property name="steering_max_torque" value="5.325"/>
+  <xacro:property name="steering_max_velocity" value="18.8495559215"/>
+  <xacro:property name="steering_max_acceleration" value="56.5486677646"/>
+  <xacro:property name="steering_drive_damping" value="1000.0"/>
+  <xacro:property name="steering_position_p_gain" value="12.56"/>
+
    <xacro:include filename="$(find fwdsrover_description)/urdf/materials.xacro"/>
+   <xacro:include filename="$(find fwdsrover_description)/urdf/actuators.xacro"/>
    <xacro:include filename="$(find fwdsrover_description)/urdf/x120a.gazebo"/>
-   <xacro:include filename="$(find fwdsrover_description)/urdf/x120a.ros2_control.xacro"/>
  
-  <!-- OPTION LRF TG30 -->
-   <xacro:include filename="$(find vs_rover_options_description)/urdf/lrf/tg30_x120a.xacro" />
-
-  <!-- OPTION bumper sensor -->
-   <!-- <xacro:include filename="$(find vs_rover_options_description)/urdf/bumper/bumper_x120a.xacro" />
-   <xacro:bumperbaseboard prefix="front" parent="base_link" xyz="0 0.20515 0.038" z_dir="180" />
-   <xacro:bumperbaseboard prefix="back" parent="base_link" xyz="0 -0.20515 0.038" z_dir="0" />
-   <xacro:bumperbaseboard prefix="left" parent="base_link" xyz="0.20515 0 0.038" z_dir="90" />
-   <xacro:bumperbaseboard prefix="right" parent="base_link" xyz="-0.20515 0 0.038" z_dir="270" /> -->
-  
-  <!-- OPTION camera stay -->
-   <!-- <xacro:include filename="$(find vs_rover_options_description)/urdf/cam_stay/cam_stay_x120a.xacro" /> -->
-   
-  <!-- OPTION Intel Realsense depth camera D435i (camera stay required) -->
-   <!-- <xacro:include filename="$(find vs_rover_options_description)/urdf/depth_cam/_d435i.urdf.xacro" />
-   <xacro:sensor_d435i parent="cam_mount_link" use_nominal_extrinsics="true">
-   <origin xyz="0.0295 0 0.0095" rpy="0 0 0" />
-   </xacro:sensor_d435i> -->
-
+  <!-- Options are selected here, without launch/YAML tuning overrides. -->
+  <xacro:property name="enable_tg30" value="true"/>
+  <xacro:if value="${enable_tg30}">
+    <xacro:include filename="$(find vs_rover_options_description)/urdf/lrf/tg30_x120a.xacro"/>
+  </xacro:if>
+  <!-- OPTION: Bumper -->
+  <!-- <xacro:include filename="$(find vs_rover_options_description)/urdf/bumper/bumper_x120a.xacro"/> -->
+  <!-- A camera-stay model has not been supplied for this rover. -->
 
   <link name="base_footprint"/>
 
@@ -145,7 +151,7 @@
       <axis xyz="0 0 1"/>
       <parent link="${parent}"/>
       <child link="${child}"/>
-      <limit lower="-6.28319" upper="6.28319" effort="2.2" velocity="28.27"/>
+      <limit lower="-6.28319" upper="6.28319" effort="${steering_max_torque}" velocity="${steering_max_velocity}"/>
       <dynamics damping="0.1"/>
     </joint>
   </xacro:macro>
@@ -156,8 +162,8 @@
       <axis xyz="0 0 1"/>
       <parent link="${parent}"/>
       <child link="${child}"/>
-      <limit lower="0.0" upper="0.015" effort="300" velocity="1.0"/>
-      <dynamics damping="300" friction="0"/>
+      <limit lower="0.0" upper="${suspension_stroke}" effort="${suspension_force}" velocity="1.0"/>
+      <dynamics damping="${suspension_damping}" friction="${suspension_friction}"/>
     </joint>
   </xacro:macro>
 
@@ -167,7 +173,7 @@
       <axis xyz="0 0 ${axis_z}"/>
       <parent link="${parent}"/>
       <child link="${child}"/>
-      <limit velocity="26.18" effort="18.0"/>
+      <limit velocity="${wheel_max_velocity}" effort="${wheel_max_torque}"/>
       <dynamics damping="0.3" friction="0.5"/>
     </joint>
   </xacro:macro>

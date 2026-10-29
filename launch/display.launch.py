@@ -62,12 +62,14 @@ def generate_launch_description():
     )
 
     joint_state_publisher_gui = Node(
-        package='joint_state_publisher_gui',
-        executable='joint_state_publisher_gui',
+        prefix='setsid',
+        package='fwdsrover_description',
+        executable='joint_state_gui.py',
         condition=IfCondition(gui)
     )
 
     rviz = Node(
+        prefix='setsid',
         package='rviz2',
         executable='rviz2',
         name='rviz2',

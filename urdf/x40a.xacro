@@ -1,48 +1,65 @@
 <?xml version="1.0"?>
 <robot name="x40a" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+  <!-- Suspension values from the selected Isaac model, in SI units. -->
+  <xacro:property name="suspension_stiffness" value="29400"/>
+  <xacro:property name="suspension_damping" value="300.0"/>
+  <xacro:property name="suspension_friction" value="0.5"/>
+  <xacro:property name="suspension_stroke" value="0.0135"/>
+  <xacro:property name="suspension_force" value="396.9"/>
+  <!-- Actuator values from the selected Isaac USD, SI units. -->
+  <xacro:property name="wheel_max_torque" value="3.5"/>
+  <xacro:property name="wheel_max_velocity" value="28.5714285714"/>
+  <xacro:property name="wheel_max_acceleration" value="21.4285714286"/>
+  <xacro:property name="wheel_drive_damping" value="3.0"/>
+  <xacro:property name="steering_max_torque" value="7.0"/>
+  <xacro:property name="steering_max_velocity" value="14.1371669412"/>
+  <xacro:property name="steering_max_acceleration" value="42.4115008236"/>
+  <xacro:property name="steering_drive_damping" value="40.0"/>
+  <xacro:property name="steering_position_p_gain" value="9.42"/>
+
    <xacro:include filename="$(find fwdsrover_description)/urdf/materials.xacro"/>
+   <xacro:include filename="$(find fwdsrover_description)/urdf/actuators.xacro"/>
    <xacro:include filename="$(find fwdsrover_description)/urdf/x40a.gazebo"/>
-   <xacro:include filename="$(find fwdsrover_description)/urdf/x40a.ros2_control.xacro"/>
  
-  <!-- OPTION LRF TG30 -->
-   <xacro:include filename="$(find vs_rover_options_description)/urdf/lrf/tg30_x40a.xacro" />
-
-  <!-- OPTION bumper sensor -->
-   <!-- <xacro:include filename="$(find vs_rover_options_description)/urdf/bumper/bumper_x40a.xacro" />
-   <xacro:bumperbaseboard prefix="front" parent="base_link" xyz="0 0.20515 0.038" z_dir="180" />
-   <xacro:bumperbaseboard prefix="back" parent="base_link" xyz="0 -0.20515 0.038" z_dir="0" />
-   <xacro:bumperbaseboard prefix="left" parent="base_link" xyz="0.20515 0 0.038" z_dir="90" />
-   <xacro:bumperbaseboard prefix="right" parent="base_link" xyz="-0.20515 0 0.038" z_dir="270" />-->
-
-  <!-- OPTION camera stay -->
-   <!-- <xacro:include filename="$(find vs_rover_options_description)/urdf/cam_stay/cam_stay_x40a.xacro" />-->
-
-  <!-- OPTION Intel Realsense depth camera D435i (camera stay required) -->
-   <!--<xacro:include filename="$(find vs_rover_options_description)/urdf/depth_cam/_d435i.urdf.xacro" />
-   <xacro:sensor_d435i parent="cam_mount_link" use_nominal_extrinsics="true">
-   <origin xyz="0.0295 0 0.0095" rpy="0 0 0" />
-   </xacro:sensor_d435i>-->
-
+  <!-- Options are selected here, without launch/YAML tuning overrides. -->
+  <xacro:property name="enable_tg30" value="true"/>
+  <xacro:if value="${enable_tg30}">
+    <xacro:include filename="$(find vs_rover_options_description)/urdf/lrf/tg30_x40a.xacro"/>
+  </xacro:if>
+  <!-- OPTION: Bumper -->
+  <!-- <xacro:include filename="$(find vs_rover_options_description)/urdf/bumper/bumper_x40a.xacro"/> -->
+  <xacro:property name="enable_camera_stay" value="false"/>
+  <xacro:property name="enable_d435i" value="false"/>
+  <xacro:if value="${enable_camera_stay or enable_d435i}">
+    <xacro:include filename="$(find vs_rover_options_description)/urdf/cam_stay/cam_stay_x40a.xacro"/>
+  </xacro:if>
+  <xacro:if value="${enable_d435i}">
+    <xacro:include filename="$(find vs_rover_options_description)/urdf/depth_cam/_d435i.urdf.xacro"/>
+    <xacro:sensor_d435i parent="cam_mount_link" use_nominal_extrinsics="true">
+      <origin xyz="0.0295 0 0.0095" rpy="0 0 0"/>
+    </xacro:sensor_d435i>
+  </xacro:if>
   <link name="base_footprint"/>
 
   <link name="base_link">
     <inertial>
-      <origin xyz="-0.000058 0.002054 0.132327" rpy="0 0 0"/>
+      <!-- CAD +Y is forward; express its unchanged mass/geometry in body +X. -->
+      <origin xyz="0.002054 0.000058 0.132327" rpy="0 0 ${radians(-90)}"/>
       <mass value="23.5"/>
       <inertia ixx="2.646709e-01" ixy="2.711956e-03" ixz="4.327639e-05"
                iyy="2.696116e-01" iyz="-1.577241e-03"
                izz="4.399520e-01"/>
     </inertial>
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="0 0 ${radians(-90)}"/>
       <geometry>
         <mesh filename="package://fwdsrover_description/meshes/x40a/base_link.stl" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="silver"/>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="0 0 ${radians(-90)}"/>
       <geometry>
         <mesh filename="package://fwdsrover_description/meshes/x40a/base_link.stl" scale="0.001 0.001 0.001"/>
       </geometry>
@@ -50,7 +67,7 @@
   </link>
 
   <joint name="base_joint" type="fixed">
-    <origin xyz="0 0 0" rpy="0 0 ${radians(-90)}"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
     <parent link="base_footprint"/>
     <child link="base_link"/>
   </joint>
@@ -167,7 +184,7 @@
       <axis xyz="0 0 1"/>
       <parent link="${parent}"/>
       <child link="${child}"/>
-      <limit lower="-3.14159" upper="3.14159" effort="${effort}" velocity="${velocity}"/>
+      <limit lower="-3.14159" upper="3.14159" effort="${steering_max_torque}" velocity="${steering_max_velocity}"/>
       <xacro:if value="${has_dynamics}">
         <dynamics damping="${damping}" friction="${friction}"/>
       </xacro:if>
@@ -180,7 +197,7 @@
       <axis xyz="0 0 1"/>
       <parent link="${parent}"/>
       <child link="${child}"/>
-      <limit lower="0.0" upper="0.015" effort="300" velocity="1.0"/>
+      <limit lower="0.0" upper="${suspension_stroke}" effort="${suspension_force}" velocity="1.0"/>
       <dynamics damping="${damping}" friction="${friction}"/>
     </joint>
   </xacro:macro>
@@ -191,7 +208,7 @@
       <axis xyz="0 0 ${axis_z}"/>
       <parent link="${parent}"/>
       <child link="${child}"/>
-      <limit effort="500" velocity="50000"/>
+      <limit effort="${wheel_max_torque}" velocity="${wheel_max_velocity}"/>
       <dynamics damping="0.02"/>
     </joint>
   </xacro:macro>
@@ -261,8 +278,8 @@
       child="${prefix}_sus_1"
       xyz="${sus_xyz}"
       rpy="${sus_rpy}"
-      damping="300"
-      friction="0"/>
+      damping="${suspension_damping}"
+      friction="${suspension_friction}"/>
 
     <!-- Wheel joint -->
     <xacro:wheel_joint
@@ -285,11 +302,11 @@
 
   <xacro:wheel_unit
     prefix="front_left"
-    steering_xyz="-0.125 0.125 0.16"
-    steering_rpy="0 0 ${radians(90)}"
+    steering_xyz="0.125 0.125 0.16"
+    steering_rpy="0 0 0"
     steering_has_dyn="true"
-    steering_damping="100.0"
-    steering_friction="0.1"
+    steering_damping="0.0"
+    steering_friction="0.0"
     sus_xyz="0.0 -0.042 -0.0605"
     sus_rpy="0 0 ${radians(-90)}"
     wheel_xyz="-0.0141 0.0 -0.031"
@@ -298,11 +315,11 @@
 
   <xacro:wheel_unit
     prefix="front_right"
-    steering_xyz="0.125 0.125 0.16"
-    steering_rpy="0 0 ${radians(-90)}"
+    steering_xyz="0.125 -0.125 0.16"
+    steering_rpy="0 0 ${radians(-180)}"
     steering_has_dyn="true"
-    steering_damping="100.0"
-    steering_friction="0.1"
+    steering_damping="0.0"
+    steering_friction="0.0"
     sus_xyz="0.0 -0.042 -0.0605"
     sus_rpy="0 0 ${radians(-90)}"
     wheel_xyz="-0.0141 0.0 -0.031"
@@ -311,11 +328,11 @@
 
   <xacro:wheel_unit
     prefix="back_right"
-    steering_xyz="0.125 -0.125 0.16"
-    steering_rpy="0 0 ${radians(-90)}"
+    steering_xyz="-0.125 -0.125 0.16"
+    steering_rpy="0 0 ${radians(-180)}"
     steering_has_dyn="true"
-    steering_damping="100.0"
-    steering_friction="0.1"
+    steering_damping="0.0"
+    steering_friction="0.0"
     sus_xyz="0.0 -0.042 -0.0605"
     sus_rpy="0 0 ${radians(-90)}"
     wheel_xyz="-0.0141 0.0 -0.031"
@@ -324,8 +341,8 @@
 
   <xacro:wheel_unit
     prefix="back_left"
-    steering_xyz="-0.125 -0.125 0.16"
-    steering_rpy="0 0 ${radians(90)}"
+    steering_xyz="-0.125 0.125 0.16"
+    steering_rpy="0 0 0"
     steering_has_dyn="false"
     steering_damping="0"
     steering_friction="0"

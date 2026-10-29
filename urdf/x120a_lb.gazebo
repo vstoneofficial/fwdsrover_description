@@ -7,13 +7,7 @@
   <xacro:property name="wb22_45_k_per_spring" value="29400"/>
   <xacro:property name="sus_spring_parallel_count" value="2"/>
 
-  <gazebo>
-    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
-      <robot_param>robot_description</robot_param>
-      <robot_param_node>robot_state_publisher</robot_param_node>
-      <parameters>$(find fwdsrover_description)/params/controllers.yaml</parameters>
-    </plugin>
-  </gazebo>
+
 
   <gazebo reference="base_link">
     <material>Gazebo/Silver</material>
@@ -48,7 +42,7 @@
     <gazebo reference="${joint}">
       <implicitSpringDamper>false</implicitSpringDamper>
       <springReference>0.0</springReference>
-      <springStiffness>${wb22_45_k_per_spring * sus_spring_parallel_count}</springStiffness>
+      <springStiffness>${suspension_stiffness}</springStiffness>
     </gazebo>
   </xacro:macro>
 

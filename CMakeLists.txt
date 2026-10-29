@@ -5,30 +5,14 @@ find_package(ament_cmake REQUIRED)
 
 message(STATUS ">>> Installing rover_twist_relay.py into lib/${PROJECT_NAME}")
 
-if(UNIX)
-  execute_process(
-    COMMAND chmod +x ${CMAKE_CURRENT_SOURCE_DIR}/params/rover_twist_relay.py
-    RESULT_VARIABLE chmod_result
-    ERROR_QUIET
-  )
-endif()
-
 # --------------------------------------------------
 # Python node
 # --------------------------------------------------
 install(
   PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/params/rover_twist_relay.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/params/joint_state_gui.py
   DESTINATION lib/${PROJECT_NAME}
-)
-
-# --------------------------------------------------
-# YAML for rover_twist_relay (explicit install)
-# --------------------------------------------------
-install(
-  FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/params/rover_twist_relay.yaml
-  DESTINATION share/${PROJECT_NAME}/params
 )
 
 # --------------------------------------------------
@@ -40,6 +24,7 @@ install(DIRECTORY
   rviz
   urdf
   params
+  worlds
   DESTINATION share/${PROJECT_NAME}
 )
 

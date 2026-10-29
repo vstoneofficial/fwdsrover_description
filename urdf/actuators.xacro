@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Native dynamic velocity servos use the joint URDF effort limits. -->
+  <xacro:macro name="velocity_drive" params="joint gain torque acceleration position_gain:=0">
+    <gazebo>
+      <plugin filename="gz-sim-joint-controller-system" name="gz::sim::systems::JointController">
+        <joint_name>${joint}</joint_name><topic>/fwds/${joint}/cmd_vel</topic>
+        <use_force_commands>false</use_force_commands>
+        <p_gain>${gain}</p_gain><i_gain>0</i_gain><d_gain>0</d_gain>
+        <i_max>0</i_max><i_min>0</i_min>
+        <cmd_max>${torque}</cmd_max><cmd_min>${-torque}</cmd_min>
+        <!-- Read by rover_twist_relay from this same expanded model. -->
+        <max_acceleration>${acceleration}</max_acceleration>
+        <position_p_gain>${position_gain}</position_p_gain>
+      </plugin>
+    </gazebo>
+  </xacro:macro>
+  <xacro:macro name="wheel_unit_drives" params="prefix">
+    <xacro:velocity_drive joint="${prefix}_wheel_joint" gain="${wheel_drive_damping}" torque="${wheel_max_torque}"
+                          acceleration="${wheel_max_acceleration}"/>
+    <xacro:velocity_drive joint="${prefix}_steering_joint" gain="${steering_drive_damping}" torque="${steering_max_torque}"
+                          acceleration="${steering_max_acceleration}" position_gain="${steering_position_p_gain}"/>
+  </xacro:macro>
+  <xacro:wheel_unit_drives prefix="front_left"/>
+  <xacro:wheel_unit_drives prefix="front_right"/>
+  <xacro:wheel_unit_drives prefix="back_right"/>
+  <xacro:wheel_unit_drives prefix="back_left"/>
+  <gazebo>
+    <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+      <topic>/joint_states</topic><update_rate>200</update_rate>
+    </plugin>
+    <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
+      <odom_frame>odom</odom_frame><robot_base_frame>base_footprint</robot_base_frame>
+      <odom_topic>/odom</odom_topic><tf_topic>/tf</tf_topic>
+      <odom_publish_frequency>50</odom_publish_frequency><dimensions>3</dimensions>
+    </plugin>
+  </gazebo>
+</robot>
