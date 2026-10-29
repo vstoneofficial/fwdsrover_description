@@ -23,6 +23,13 @@ from launch_ros.parameter_descriptions import ParameterValue
 import xacro
 
 
+class IsolatedNode(Node):
+    """Forward terminal shutdown to a child outside the terminal session."""
+
+    def _shutdown_process(self, context, *, send_sigint):
+        return super()._shutdown_process(context, send_sigint=True)
+
+
 class DrainBeforeShutdown:
     """Defer the normal launch signal until the producer has drained."""
     shutdown_ready = False
@@ -156,14 +163,14 @@ def setup(context):
             logger.error('Gazebo did not complete its normal shutdown within five seconds')
         else:
             logger.info('Gazebo stopped after sensor updates drained')
-    publisher = Node(prefix='setsid',
+    publisher = IsolatedNode(prefix='setsid',
         package='robot_state_publisher', executable='robot_state_publisher',
         parameters=[{'robot_description': ParameterValue(description, value_type=str),
                      'use_sim_time': True}], output='screen')
-    spawn = Node(prefix='setsid', package='ros_gz_sim', executable='create',
+    spawn = IsolatedNode(prefix='setsid', package='ros_gz_sim', executable='create',
                  arguments=['-name', rover, '-topic', 'robot_description', '-z', '0.04'],
                  output='screen')
-    relay = Node(prefix='setsid', package='fwdsrover_description', executable='rover_twist_relay.py',
+    relay = IsolatedNode(prefix='setsid', package='fwdsrover_description', executable='rover_twist_relay.py',
                  parameters=[{'robot_description': ParameterValue(description, value_type=str),
                               'use_sim_time': True}], output='screen')
     topics = [
@@ -197,7 +204,7 @@ def setup(context):
             declaration = info + '@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo' if info else None
             if declaration and declaration not in topics:
                 topics.append(declaration)
-    bridge = Node(prefix='setsid', package='ros_gz_bridge', executable='parameter_bridge', arguments=topics,
+    bridge = IsolatedNode(prefix='setsid', package='ros_gz_bridge', executable='parameter_bridge', arguments=topics,
                   remappings=bridge_remappings,
                   parameters=[{'use_sim_time': True}], output='screen')
     point_bridges = []
