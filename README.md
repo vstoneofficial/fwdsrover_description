@@ -10,20 +10,22 @@ ROS 2 Jazzy / Gazebo Harmonic向けの、`x40a`、`x120a`、`x120a_lb`のモデ�
 ## 準備
 
 Ubuntu 24.04にROS 2 Jazzyをインストールしてから、以下を実行してください。
-`src`フォルダーを作る必要はありません。
+以下は`~/ros2_ws`に配置する手順です。
+既にクローン済みのリポジトリがある場合、その`git clone`は省略してください。
 
 ```bash
 source "$(dpkg-query -L ros-jazzy-ros-workspace | awk '/\/setup\.bash$/ {print; exit}')"
-mkdir -p fwdsrover_ws
-cd fwdsrover_ws
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
 git clone --branch jazzy https://github.com/vstoneofficial/fwdsrover_description.git fwdsrover_description
 git clone --branch jazzy https://github.com/vstoneofficial/vs_rover_options_description.git vs_rover_options_description
-rosdep install --from-paths fwdsrover_description vs_rover_options_description --ignore-src --rosdistro jazzy -y
+cd ~/ros2_ws
+rosdep install --from-paths src --ignore-src --rosdistro jazzy -y
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-次回からは、作成したワークスペースのルートへ移動し、起動前に`source install/setup.bash`を実行してください。
+次回からは、`~/ros2_ws`へ移動し、起動前に`source install/setup.bash`を実行してください。
 
 1. 対応するオプション
    - LRF TG30（3機種の前後）
@@ -73,6 +75,7 @@ ros2 launch fwdsrover_description gazebo.launch.py rover:=x40a
 別のターミナルでワークスペースを読み込み、走行指令を送ります。
 
 ```bash
+cd ~/ros2_ws
 source install/setup.bash
 ros2 topic pub --once /rover_twist geometry_msgs/msg/Twist '{linear: {x: 0.2}}'
 ```
